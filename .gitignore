@@ -1,0 +1,12 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.env
+.env.*
+.vscode
+.idea
+
+# Không đưa lên repo
+CLAUDE_MASTER_PROMPT.md

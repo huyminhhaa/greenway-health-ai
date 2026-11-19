@@ -1,0 +1,28 @@
+[
+ {
+  "shape": "consult-led",
+  "theme": "dose",
+  "axes": "light/grotesk-sans/chromatic-green",
+  "hero": "stage",
+  "nav": "edge-aligned",
+  "footer": "letter close",
+  "imagery": "product: 3D capsules + real Greenway packshots",
+  "photos": 0,
+  "entry": "redesign",
+  "fingerprint": "hero-ask+3d-capsules+rx-label/chat-tray+profile-side/needs-rail/faq-rows/letter-footer",
+  "sections": [
+   "hero",
+   "consult",
+   "shelf",
+   "faq",
+   "footer"
+  ],
+  "signature": "pharmacy label with a real Greenway product and dose",
+  "waived": [
+   "37"
+  ],
+  "prompt": "chat-first Greenway AI pharmacist, 3D hero, image upload, continuous chat, metrics drag+type",
+  "date": "2026-11-19",
+  "mode": "build"
+ }
+]
