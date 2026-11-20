@@ -23,6 +23,16 @@ Không cần backend: mọi câu trả lời của AI đang là mock (trễ 800 
 - **Sản phẩm theo nhu cầu**: 27 sản phẩm thật của Greenway Việt Nam (giá VNĐ, ảnh) trong `src/data/greenwayCatalog.ts`, mỗi sản phẩm mở thẳng trang mua.
 - Thiết kế theo Hallmark (theme Dose), font có đủ dấu tiếng Việt, hiệu ứng trượt khi cuộn, tôn trọng chế độ giảm chuyển động.
 
+## Đa ngôn ngữ (VI / EN)
+
+Nút **VI / EN** trên thanh điều hướng; nhớ lựa chọn cho lần sau, hỗ trợ `?lang=en` trên đường dẫn, tự đổi `<html lang>`, tiêu đề trang, đường dẫn cửa hàng (`lang=`) và cách viết số tiền.
+
+- **Chữ giao diện**: `src/i18n/vi.ts` là bản gốc, `src/i18n/en.ts` phải có đủ mọi key như bản gốc. Thêm một dòng vào `vi.ts` mà quên `en.ts` thì `npm run build` báo lỗi, nên không bao giờ sót bản dịch.
+- **Trong component**: `const t = useT();` rồi dùng `t.hero.title`. Ngoài React: `getT()`.
+- **Catalog**: tên riêng để chuỗi thường; chữ cần dịch dùng `{ vi, en }`; quy cách viết `pack(60, 'capsule')` để tự ra "60 viên nang" / "60 capsules".
+- **Thêm ngôn ngữ mới** (ví dụ tiếng Nga): tạo `src/i18n/ru.ts` theo khuôn `vi.ts`, thêm `'ru'` vào `Lang`, `LANGS`, `DICTS` trong `src/i18n/index.ts`.
+- Hệ thống không tự dịch máy: câu mới vẫn cần người viết bản tiếng Anh, nhưng TypeScript bảo đảm không thiếu câu nào.
+
 ## Cấu trúc
 
 ```
@@ -48,6 +58,7 @@ Request:
 ```json
 {
   "message": "Tôi hay mất ngủ và mỏi vai gáy",
+  "language": "vi",
   "images_base64": [],
   "profile": { "gender": "female", "age": 38, "height_cm": 158, "weight_kg": 62 },
   "history": [
@@ -57,8 +68,9 @@ Request:
 }
 ```
 
+- `language` là `"vi"` hoặc `"en"`: trả lời (`text`, `findings`, `reason`, `suggestions`) bằng đúng ngôn ngữ này.
 - Mọi trường trong `profile` có thể là `null` (khách không bắt buộc nhập).
-- Khi khách bấm "Gửi chỉ số cho AI phân tích", `message` bắt đầu bằng `Chỉ số của tôi:`.
+- Khi khách bấm "Gửi chỉ số cho AI phân tích", `message` bắt đầu bằng `Chỉ số của tôi:` (tiếng Anh: `My metrics:`).
 
 Response:
 

@@ -4,6 +4,7 @@ import { ArrowUp, ImagePlus, X } from 'lucide-react';
 import { useHealthStore } from '../../store/useHealthStore';
 import type { ChatAttachment } from '../../types/healthcare';
 import { uid } from '../../lib/health';
+import { getT, useT } from '../../i18n';
 
 const MAX_FILES = 5;
 const MAX_MB = 10;
@@ -13,6 +14,7 @@ export interface ComposerHandle {
 }
 
 export function Composer({ register }: { register?: (h: ComposerHandle) => void }) {
+  const t = useT();
   const send = useHealthStore((s) => s.send);
   const pending = useHealthStore((s) => s.pending);
   const [text, setText] = useState('');
@@ -35,11 +37,13 @@ export function Composer({ register }: { register?: (h: ComposerHandle) => void 
       url: URL.createObjectURL(file),
       file,
     }));
+    // addFiles được gọi từ ngoài (kéo thả) qua handle đăng ký một lần, nên đọc từ điển lúc gọi.
+    const c = getT().composer;
     const problems: string[] = [];
-    if (images.length < incoming.length) problems.push('chỉ nhận file ảnh');
-    if (tooBig.length) problems.push(`ảnh tối đa ${MAX_MB} MB`);
-    if (ok.length > room) problems.push(`tối đa ${MAX_FILES} ảnh một lần`);
-    setNotice(problems.length ? `Một số file chưa được thêm: ${problems.join(', ')}.` : null);
+    if (images.length < incoming.length) problems.push(c.notImage);
+    if (tooBig.length) problems.push(c.tooBig(MAX_MB));
+    if (ok.length > room) problems.push(c.tooMany(MAX_FILES));
+    setNotice(problems.length ? c.skipped(problems.join(', ')) : null);
     filesRef.current = [...filesRef.current, ...accepted];
     setFiles(filesRef.current);
   };
@@ -98,7 +102,7 @@ export function Composer({ register }: { register?: (h: ComposerHandle) => void 
         {files.length > 0 && (
           <motion.ul
             className="composer__files"
-            aria-label="Ảnh sẽ gửi"
+            aria-label={t.composer.filesLabel}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
@@ -107,7 +111,7 @@ export function Composer({ register }: { register?: (h: ComposerHandle) => void 
             {files.map((f) => (
               <li key={f.id} className="thumb">
                 <img src={f.url} alt={f.name} width={64} height={64} />
-                <button type="button" className="thumb__remove" onClick={() => removeFile(f.id)} aria-label={`Bỏ ảnh ${f.name}`}>
+                <button type="button" className="thumb__remove" onClick={() => removeFile(f.id)} aria-label={t.composer.remove(f.name)}>
                   <X size={14} aria-hidden="true" />
                 </button>
               </li>
@@ -132,13 +136,13 @@ export function Composer({ register }: { register?: (h: ComposerHandle) => void 
           type="button"
           className="composer__attach"
           onClick={() => inputRef.current?.click()}
-          aria-label="Gửi kèm ảnh"
-          title="Gửi kèm ảnh"
+          aria-label={t.composer.attach}
+          title={t.composer.attach}
         >
           <ImagePlus size={20} aria-hidden="true" />
         </button>
         <label className="visually-hidden" htmlFor="chat-input">
-          Tin nhắn cho dược sĩ AI
+          {t.composer.inputLabel}
         </label>
         <textarea
           id="chat-input"
@@ -146,22 +150,22 @@ export function Composer({ register }: { register?: (h: ComposerHandle) => void 
           name="message"
           rows={1}
           className="composer__input"
-          placeholder="Nhắn cho dược sĩ AI…"
+          placeholder={t.composer.placeholder}
           value={text}
           enterKeyHint="send"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
           onPaste={onPaste}
         />
-        <button type="submit" className="composer__send" disabled={!canSend} aria-label="Gửi">
+        <button type="submit" className="composer__send" disabled={!canSend} aria-label={t.composer.send}>
           <ArrowUp size={20} aria-hidden="true" />
         </button>
       </div>
       <p className={`composer__hint${notice ? ' is-error' : ''}`} aria-live="polite">
         {notice ?? (
           <>
-            <span className="composer__keys">Enter để gửi, Shift + Enter để xuống dòng. </span>
-            Gửi kèm tối đa 5 ảnh.
+            <span className="composer__keys">{t.composer.keys}</span>
+            {t.composer.limit(MAX_FILES)}
           </>
         )}
       </p>

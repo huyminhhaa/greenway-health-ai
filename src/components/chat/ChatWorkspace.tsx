@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ImageDown, Plus, RotateCcw, SlidersHorizontal, UserRoundCheck } from 'lucide-react';
-import { useHealthStore } from '../../store/useHealthStore';
+import { WELCOME_ID, useHealthStore } from '../../store/useHealthStore';
 import { getProduct } from '../../data/greenwayCatalog';
 import type { ChatMessage } from '../../types/healthcare';
 import { formatNumber, metricsSummary } from '../../lib/health';
@@ -9,6 +9,7 @@ import { ProductLabel } from '../ecommerce/ProductCard';
 import { ProfilePanel } from '../consultation/MetricSliders';
 import { VoiceVisualizer } from '../consultation/VoiceVisualizer';
 import { Composer, type ComposerHandle } from './Composer';
+import { useT } from '../../i18n';
 
 const CHARS_PER_SECOND = 110;
 const PAUSE: Record<string, number> = { '.': 8, ',': 3, ':': 4, '?': 8, '\n': 10 };
@@ -68,7 +69,12 @@ function StreamText({ text, active, onDone, onTick }: { text: string; active: bo
   );
 }
 
-function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: boolean; onTick: () => void }) {
+function AssistantMessage({ msg, isLast, isOnly, onTick }: { msg: ChatMessage; isLast: boolean; isOnly: boolean; onTick: () => void }) {
+  const t = useT();
+  const isWelcome = msg.id === WELCOME_ID;
+  // Tin chào mừng và câu báo lỗi lấy chữ theo ngôn ngữ đang chọn lúc hiển thị.
+  const text = isWelcome ? t.chat.welcome : msg.error ? t.chat.sendError(msg.errorDetail ?? '') : msg.text;
+  const suggestions = isWelcome ? (isOnly ? t.chat.welcomeSuggestions : undefined) : msg.suggestions;
   const finish = useHealthStore((s) => s.finishStreaming);
   const send = useHealthStore((s) => s.send);
   const retry = useHealthStore((s) => s.retry);
@@ -79,15 +85,15 @@ function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: b
     <div className={`msg msg--ai${msg.error ? ' is-error' : ''}`}>
       <img className="msg__avatar" src="/greenway-mark.svg" alt="" width={32} height={35} />
       <div className="msg__body">
-        <p className="msg__who">Dược sĩ AI</p>
+        <p className="msg__who">{t.chat.who}</p>
         <p className="msg__content">
-          <StreamText text={msg.text} active={!!msg.streaming} onDone={() => finish(msg.id)} onTick={onTick} />
+          <StreamText text={text} active={!!msg.streaming} onDone={() => finish(msg.id)} onTick={onTick} />
         </p>
 
         {msg.error && (
           <button type="button" className="btn btn--quiet msg__retry" onClick={retry}>
             <RotateCcw size={16} aria-hidden="true" />
-            Thử lại
+            {t.chat.retry}
           </button>
         )}
 
@@ -101,7 +107,7 @@ function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: b
             {msg.analysis.bmi !== null && (
               <p className="analysis__bmi">
                 <span className="analysis__figure mono">{formatNumber(msg.analysis.bmi)}</span>
-                <span>BMI, {msg.analysis.bmiLabel?.toLowerCase()}</span>
+                <span>{t.chat.bmiLine(msg.analysis.bmiLabel ?? '')}</span>
               </p>
             )}
             <ul className="analysis__list">
@@ -113,7 +119,7 @@ function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: b
         )}
 
         {settled && msg.products && msg.products.length > 0 && (
-          <ul className="msg__products" aria-label="Sản phẩm gợi ý">
+          <ul className="msg__products" aria-label={t.chat.productsLabel}>
             {msg.products.map((r, i) => {
               const p = getProduct(r.code);
               if (!p) return null;
@@ -132,9 +138,9 @@ function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: b
           </ul>
         )}
 
-        {settled && isLast && msg.suggestions && msg.suggestions.length > 0 && (
-          <ul className="msg__suggest" aria-label="Gợi ý câu hỏi tiếp">
-            {msg.suggestions.map((s) => (
+        {settled && isLast && suggestions && suggestions.length > 0 && (
+          <ul className="msg__suggest" aria-label={t.chat.suggestLabel}>
+            {suggestions.map((s) => (
               <li key={s}>
                 <button type="button" className="key" disabled={pending} onClick={() => void send(s)}>
                   {s}
@@ -149,11 +155,12 @@ function AssistantMessage({ msg, isLast, onTick }: { msg: ChatMessage; isLast: b
 }
 
 function UserMessage({ msg }: { msg: ChatMessage }) {
+  const t = useT();
   return (
     <div className="msg msg--me">
       <div className="msg__bubble">
         {msg.attachments && msg.attachments.length > 0 && (
-          <ul className="msg__images" aria-label="Ảnh đã gửi">
+          <ul className="msg__images" aria-label={t.chat.sentImages}>
             {msg.attachments.map((a) => (
               <li key={a.id}>
                 <img src={a.url} alt={a.name} width={160} height={160} />
@@ -181,6 +188,7 @@ function useIsWide() {
 
 /** Nhãn trên đầu khung chat: AI đang dùng chỉ số nào. Đổi chỉ số là nhãn đổi theo ngay. */
 function MetricsChip({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
   const metrics = useHealthStore((s) => s.metrics);
   const summary = metricsSummary(metrics);
   return (
@@ -194,16 +202,17 @@ function MetricsChip({ onOpen }: { onOpen: () => void }) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.92 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        aria-label={summary ? `Dược sĩ AI đang dùng chỉ số: ${summary}. Bấm để sửa` : 'Thêm chỉ số cơ thể'}
+        aria-label={summary ? t.chat.chipUsing(summary) : t.chat.addMetrics}
       >
         {summary ? <UserRoundCheck size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
-        <span className="chip__text">{summary || 'Thêm chỉ số cơ thể'}</span>
+        <span className="chip__text">{summary || t.chat.addMetrics}</span>
       </motion.button>
     </AnimatePresence>
   );
 }
 
 export function ChatWorkspace() {
+  const t = useT();
   const messages = useHealthStore((s) => s.messages);
   const pending = useHealthStore((s) => s.pending);
   const reset = useHealthStore((s) => s.reset);
@@ -234,17 +243,68 @@ export function ChatWorkspace() {
 
   // Lăn chuột trên khung chat thì cuộn cả trang (theo yêu cầu); lịch sử chat kéo bằng thanh cuộn bên cạnh,
   // bàn phím hoặc vuốt trên điện thoại. Giữ Ctrl để phóng to vẫn chạy như thường.
+  // Cuộn có quán tính: cộng dồn từng nấc lăn vào một vị trí đích rồi trượt dần tới đó mỗi khung hình,
+  // để không bị giật khi con trỏ đi từ phần trang thường (trình duyệt tự cuộn mượt) vào khung chat.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let target: number | null = null;
+    let raf = 0;
+    let lastSet = -1;
+
+    const step = () => {
+      if (target === null) return;
+      const cur = window.scrollY;
+      // Trang vừa bị cuộn bởi thứ khác (trình duyệt tự cuộn khi con trỏ đã ra ngoài khung chat,
+      // kéo thanh cuộn, bàn phím): nhường lại ngay, không kéo trang về đích cũ.
+      if (lastSet >= 0 && Math.abs(cur - lastSet) > 2) return cancel();
+      const diff = target - cur;
+      if (Math.abs(diff) < 0.6) {
+        window.scrollTo(0, target);
+        return cancel();
+      }
+      lastSet = Math.round(cur + diff * 0.24);
+      window.scrollTo(0, lastSet);
+      raf = requestAnimationFrame(step);
+    };
+
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      window.scrollBy({ top: e.deltaY * unit, behavior: 'instant' as ScrollBehavior });
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const from = target ?? window.scrollY;
+      target = Math.min(max, Math.max(0, from + e.deltaY * unit));
+      if (reduce) {
+        window.scrollTo(0, target);
+        target = null;
+        return;
+      }
+      if (!raf) raf = requestAnimationFrame(step);
     };
+    // Bỏ đích cũ: khi lăn ở ngoài khung chat, kéo thanh cuộn hoặc dùng bàn phím giữa chừng.
+    function cancel() {
+      target = null;
+      lastSet = -1;
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    const onWheelOutside = (e: WheelEvent) => {
+      if (!el.contains(e.target as Node)) cancel();
+    };
+
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    window.addEventListener('wheel', onWheelOutside, { passive: true, capture: true });
+    window.addEventListener('keydown', cancel);
+    window.addEventListener('pointerdown', cancel);
+    return () => {
+      cancel();
+      el.removeEventListener('wheel', onWheel);
+      window.removeEventListener('wheel', onWheelOutside, { capture: true });
+      window.removeEventListener('keydown', cancel);
+      window.removeEventListener('pointerdown', cancel);
+    };
   }, []);
 
   useEffect(() => {
@@ -270,8 +330,8 @@ export function ChatWorkspace() {
     <section id="tu-van" className="consult" aria-labelledby="consult-title">
       <div className="container">
         <header className="consult__head" data-reveal>
-          <h2 id="consult-title">Nói chuyện với dược sĩ AI</h2>
-          <p className="lead">Hỏi bao nhiêu lượt cũng được, gửi ảnh nếu cần. Chỉ số cơ thể chỉ thêm khi bạn muốn.</p>
+          <h2 id="consult-title">{t.chat.title}</h2>
+          <p className="lead">{t.chat.lead}</p>
         </header>
 
         <div className="consult__grid">
@@ -296,7 +356,7 @@ export function ChatWorkspace() {
             <div className="tray__bar">
               <p className="tray__status" role="status">
                 <img src="/greenway-mark.svg" alt="" width={18} height={20} />
-                <span className="tray__status-text">{pending ? 'Dược sĩ AI đang soạn trả lời' : 'Dược sĩ AI sẵn sàng'}</span>
+                <span className="tray__status-text">{pending ? t.chat.typing : t.chat.ready}</span>
               </p>
               <MetricsChip onOpen={openProfile} />
               <button
@@ -310,7 +370,7 @@ export function ChatWorkspace() {
                 }}
               >
                 <RotateCcw size={15} aria-hidden="true" />
-                {confirmReset ? 'Bấm lại để xóa' : 'Trò chuyện mới'}
+                {confirmReset ? t.chat.confirmReset : t.chat.newChat}
               </button>
             </div>
 
@@ -320,7 +380,7 @@ export function ChatWorkspace() {
               onScroll={onScroll}
               role="log"
               aria-live="polite"
-              aria-label="Cuộc trò chuyện"
+              aria-label={t.chat.log}
               tabIndex={0}
             >
               {messages.map((m) =>
@@ -341,7 +401,7 @@ export function ChatWorkspace() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
                   >
-                    <AssistantMessage msg={m} isLast={m.id === lastAi?.id} onTick={toBottom} />
+                    <AssistantMessage msg={m} isLast={m.id === lastAi?.id} isOnly={messages.length === 1} onTick={toBottom} />
                   </motion.div>
                 ),
               )}
@@ -350,7 +410,7 @@ export function ChatWorkspace() {
                   <img className="msg__avatar" src="/greenway-mark.svg" alt="" width={32} height={35} />
                   <div className="msg__body">
                     <VoiceVisualizer />
-                    <span className="visually-hidden">Dược sĩ AI đang soạn trả lời</span>
+                    <span className="visually-hidden">{t.chat.typing}</span>
                   </div>
                 </div>
               )}
@@ -361,7 +421,7 @@ export function ChatWorkspace() {
             {dragging && (
               <div className="tray__drop" aria-hidden="true">
                 <ImageDown size={28} />
-                Thả ảnh vào đây để gửi kèm
+                {t.chat.dropHere}
               </div>
             )}
           </div>
@@ -370,7 +430,7 @@ export function ChatWorkspace() {
             {wide ? (
               <>
                 <h3 id="profile-title" className="side__title">
-                  Chỉ số cơ thể
+                  {t.profile.title}
                 </h3>
                 <ProfilePanel />
               </>
@@ -378,8 +438,8 @@ export function ChatWorkspace() {
               <details className="side__details" open={profileOpen} onToggle={(e) => setProfileOpen(e.currentTarget.open)}>
                 <summary>
                   <SlidersHorizontal size={18} aria-hidden="true" />
-                  <span id="profile-title">Chỉ số cơ thể</span>
-                  <span className="side__optional">không bắt buộc</span>
+                  <span id="profile-title">{t.profile.title}</span>
+                  <span className="side__optional">{t.profile.optional}</span>
                 </summary>
                 <ProfilePanel showNote={false} />
               </details>

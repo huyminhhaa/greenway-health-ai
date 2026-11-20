@@ -2,16 +2,16 @@ import { create } from 'zustand';
 import type { ChatAttachment, ChatMessage, UserMetrics } from '../types/healthcare';
 import { sendChatMessage } from '../services/api';
 import { metricsSummary, uid } from '../lib/health';
+import { getLang, getT } from '../i18n';
 
-/** Tiền tố của tin nhắn gửi chỉ số; mock API nhận diện theo cụm này. */
-export const METRICS_PREFIX = 'Chỉ số của tôi:';
+/** Tin chào mừng: chữ và gợi ý lấy từ từ điển lúc hiển thị (đổi ngôn ngữ là đổi theo). */
+export const WELCOME_ID = 'welcome';
+const WELCOME: ChatMessage = { id: WELCOME_ID, role: 'assistant', text: '' };
 
-const WELCOME: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  text: 'Chào bạn, mình là dược sĩ AI của Greenway. Bạn đang thấy khó chịu ở đâu, hay muốn cải thiện điều gì? Cứ nhắn tự nhiên, gửi kèm ảnh cũng được.',
-  suggestions: ['Tôi khó ngủ, hay tỉnh giữa đêm', 'Tôi muốn giảm mỡ bụng', 'Tôi hay đau mỏi vai gáy', 'Mỡ máu tôi hơi cao'],
-};
+/** Khóa so sánh chỉ số không phụ thuộc ngôn ngữ; chuỗi rỗng khi chưa nhập gì. */
+export function metricsKey(m: UserMetrics): string {
+  return Object.values(m).every((v) => v === null) ? '' : JSON.stringify(m);
+}
 
 interface HealthState {
   metrics: UserMetrics;
@@ -20,7 +20,7 @@ interface HealthState {
   /** Tăng mỗi lần có tin nhắn được gửi từ ngoài khung chat (hero, thẻ sản phẩm) để khung chat cuộn tới. */
   focusTick: number;
 
-  /** Chỉ số đã gửi cho AI ở lượt gần nhất (dạng chuỗi tóm tắt), để biết có chỉ số mới chưa gửi. */
+  /** Chỉ số đã gửi cho AI ở lượt gần nhất (metricsKey), để biết có chỉ số mới chưa gửi. */
   sentMetrics: string;
 
   setMetric: <K extends keyof UserMetrics>(key: K, value: UserMetrics[K]) => void;
@@ -47,7 +47,7 @@ export const useHealthStore = create<HealthState>((set, get) => ({
   sendMetrics: () => {
     const summary = metricsSummary(get().metrics);
     if (!summary) return;
-    void get().send(`${METRICS_PREFIX} ${summary}.`);
+    void get().send(`${getT().summary.prefix} ${summary}.`);
   },
 
   send: async (raw, attachments = [], opts) => {
@@ -56,7 +56,7 @@ export const useHealthStore = create<HealthState>((set, get) => ({
 
     const userMsg: ChatMessage = { id: uid(), role: 'user', text, attachments };
     const history = get()
-      .messages.filter((m) => m.id !== 'welcome' && !m.error)
+      .messages.filter((m) => m.id !== WELCOME_ID && !m.error)
       .map(({ role, text: t, products }) => ({ role, text: t, products }));
 
     set((s) => ({
@@ -67,10 +67,10 @@ export const useHealthStore = create<HealthState>((set, get) => ({
 
     try {
       const metrics = get().metrics;
-      const reply = await sendChatMessage({ message: text, attachments, metrics, history });
+      const reply = await sendChatMessage({ message: text, attachments, metrics, history, lang: getLang() });
       set((s) => ({
         pending: false,
-        sentMetrics: metricsSummary(metrics),
+        sentMetrics: metricsKey(metrics),
         messages: [...s.messages, { id: uid(), role: 'assistant', streaming: true, ...reply }],
       }));
     } catch (err) {
@@ -78,12 +78,7 @@ export const useHealthStore = create<HealthState>((set, get) => ({
         pending: false,
         messages: [
           ...s.messages,
-          {
-            id: uid(),
-            role: 'assistant',
-            error: true,
-            text: `Chưa gửi được tin nhắn${err instanceof Error ? ` (${err.message})` : ''}. Tin của bạn vẫn còn đây, bấm thử lại nhé.`,
-          },
+          { id: uid(), role: 'assistant', text: '', error: true, errorDetail: err instanceof Error ? err.message : '' },
         ],
       }));
     }

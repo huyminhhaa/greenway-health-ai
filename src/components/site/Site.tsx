@@ -1,8 +1,34 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { SHOP_HOME } from '../../data/greenwayCatalog';
+import { shopHome } from '../../data/greenwayCatalog';
+import { LANGS, useLang, useT } from '../../i18n';
+
+/** Nút chuyển ngôn ngữ VI / EN. */
+function LangSwitch() {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
+  const setLang = useLang((s) => s.setLang);
+  return (
+    <div className="lang" role="group" aria-label={t.lang.label}>
+      {LANGS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          className="lang__btn"
+          aria-pressed={lang === id}
+          aria-label={t.lang[id]}
+          lang={id}
+          onClick={() => setLang(id)}
+        >
+          {id.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function Nav() {
+  const t = useT();
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     let raf = 0;
@@ -21,15 +47,16 @@ export function Nav() {
   return (
     <header className={`nav${scrolled ? ' is-scrolled' : ''}`}>
       <div className="container nav__inner">
-        <a href="#top" className="nav__logo" aria-label="Greenway Global, về đầu trang">
+        <a href="#top" className="nav__logo" aria-label={t.nav.home}>
           <img src="/greenway-wordmark.svg" alt="" width={124} height={30} className="nav__word" />
         </a>
-        <nav aria-label="Chính" className="nav__links">
+        <nav aria-label={t.nav.main} className="nav__links">
           <a href="#san-pham" className="nav__link">
-            Sản phẩm
+            {t.nav.products}
           </a>
+          <LangSwitch />
           <a href="#tu-van" className="btn btn--clear nav__cta">
-            Bắt đầu hỏi
+            {t.nav.start}
           </a>
         </nav>
       </div>
@@ -37,33 +64,17 @@ export function Nav() {
   );
 }
 
-const FAQ = [
-  {
-    q: 'Có phải đăng ký hay điền form không?',
-    a: 'Không. Mở trang là hỏi được ngay. Tuổi, chiều cao, cân nặng chỉ thêm khi bạn muốn tư vấn sát hơn.',
-  },
-  {
-    q: 'Gửi ảnh gì thì có ích?',
-    a: 'Ảnh kết quả xét nghiệm, vùng da đang gặp vấn đề, hoặc hộp thuốc bạn đang dùng.',
-  },
-  {
-    q: 'Mua sản phẩm ở đâu?',
-    a: 'Tại cửa hàng chính hãng của Greenway Global. Mỗi sản phẩm có nút mở thẳng trang mua.',
-  },
-  {
-    q: 'Dược sĩ AI có thay được bác sĩ không?',
-    a: 'Không. Đây là tư vấn tham khảo về thực phẩm bảo vệ sức khỏe, không thay chẩn đoán hay đơn thuốc.',
-  },
-];
-
 export function Faq() {
+  const t = useT();
   return (
     <section className="faq" aria-labelledby="faq-title">
       <div className="container faq__grid">
-        <h2 id="faq-title" data-reveal>Trước khi bạn hỏi</h2>
+        <h2 id="faq-title" data-reveal>
+          {t.faq.title}
+        </h2>
         <dl className="faq__rows">
-          {FAQ.map((f, i) => (
-            <div key={f.q} className="faq__row" data-reveal style={{ ['--i' as string]: i + 1 }}>
+          {t.faq.items.map((f, i) => (
+            <div key={i} className="faq__row" data-reveal style={{ ['--i' as string]: i + 1 }}>
               <dt>{f.q}</dt>
               <dd>{f.a}</dd>
             </div>
@@ -75,33 +86,32 @@ export function Faq() {
 }
 
 export function Footer() {
+  const t = useT();
+  const lang = useLang((s) => s.lang);
   return (
     <footer className="footer">
       <div className="container footer__grid">
         <div className="footer__letter" data-reveal>
-          <p className="footer__sign">Chúc bạn ngủ ngon, ăn ngon và khỏe từ bên trong.</p>
-          <p className="footer__from">Dược sĩ AI của Greenway</p>
+          <p className="footer__sign">{t.footer.sign}</p>
+          <p className="footer__from">{t.footer.from}</p>
         </div>
         <div className="footer__side" data-reveal style={{ ['--i' as string]: 2 }}>
           <ul className="footer__links">
             <li>
-              <a href="#tu-van">Trò chuyện</a>
+              <a href="#tu-van">{t.footer.chat}</a>
             </li>
             <li>
-              <a href="#san-pham">Sản phẩm</a>
+              <a href="#san-pham">{t.footer.products}</a>
             </li>
             <li>
-              <a href={SHOP_HOME} target="_blank" rel="noopener noreferrer" className="footer__ext">
-                Cửa hàng Greenway Global
+              <a href={shopHome(lang)} target="_blank" rel="noopener noreferrer" className="footer__ext">
+                {t.footer.shop}
                 <ExternalLink size={15} aria-hidden="true" />
               </a>
             </li>
           </ul>
-          <p className="footer__legal">
-            Sản phẩm là thực phẩm bảo vệ sức khỏe, không phải là thuốc và không có tác dụng thay thế thuốc chữa bệnh. Tư vấn
-            mang tính tham khảo.
-          </p>
-          <p className="footer__legal">Logo, ảnh và giá sản phẩm: Greenway Global.</p>
+          <p className="footer__legal">{t.footer.legal}</p>
+          <p className="footer__legal">{t.footer.credit}</p>
         </div>
       </div>
     </footer>

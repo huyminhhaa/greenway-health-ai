@@ -3,15 +3,8 @@ import { ArrowUp, Pause, Play } from 'lucide-react';
 import { useHealthStore } from '../../store/useHealthStore';
 import { getProduct } from '../../data/greenwayCatalog';
 import { formatVnd } from '../../lib/health';
+import { loc, useT } from '../../i18n';
 import type { ProductScene } from './productScene';
-
-const QUICK = ['Khó ngủ', 'Mỡ bụng', 'Đau vai gáy', 'Mỡ máu cao'];
-const QUICK_TEXT: Record<string, string> = {
-  'Khó ngủ': 'Tôi khó ngủ, hay tỉnh giữa đêm',
-  'Mỡ bụng': 'Tôi muốn giảm mỡ bụng',
-  'Đau vai gáy': 'Tôi hay đau mỏi vai gáy, tê tay khi ngủ dậy',
-  'Mỡ máu cao': 'Mỡ máu tôi hơi cao',
-};
 
 const SAMPLE = getProduct('070707')!;
 
@@ -22,6 +15,7 @@ function goToChat() {
 }
 
 export function Hero() {
+  const t = useT();
   const send = useHealthStore((s) => s.send);
   const [text, setText] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,10 +54,14 @@ export function Hero() {
     const stage = stageRef.current;
     if (!stage) return;
     const sync = () => sceneRef.current?.setPlaying(visibleRef.current && !pausedRef.current && !document.hidden);
-    const io = new IntersectionObserver(([e]) => {
-      visibleRef.current = e.isIntersecting;
-      sync();
-    });
+    // Dừng vẽ 3D khi cảnh chỉ còn dưới 30% trong màn hình, để không tranh GPU với việc cuộn xuống phần chat.
+    const io = new IntersectionObserver(
+      ([e]) => {
+        visibleRef.current = e.isIntersecting && e.intersectionRatio >= 0.3;
+        sync();
+      },
+      { threshold: [0, 0.3, 0.6, 1] },
+    );
     io.observe(stage);
     document.addEventListener('visibilitychange', sync);
     return () => {
@@ -100,15 +98,15 @@ export function Hero() {
       <div className="container hero__grid">
         <div className="hero__copy">
           <h1 id="hero-title">
-            Kể triệu chứng,
+            {t.hero.titleA}
             <br />
-            nhận phác đồ Greenway.
+            {t.hero.titleB}
           </h1>
-          <p className="lead hero__lead">Nhắn như với dược sĩ quen, không cần điền form trước.</p>
+          <p className="lead hero__lead">{t.hero.lead}</p>
 
           <form className="hero__ask" onSubmit={onSubmit}>
             <label className="visually-hidden" htmlFor="hero-ask">
-              Bạn đang gặp vấn đề gì?
+              {t.hero.askLabel}
             </label>
             <input
               id="hero-ask"
@@ -116,21 +114,21 @@ export function Hero() {
               className="input"
               autoComplete="off"
               enterKeyHint="send"
-              placeholder="Ví dụ: tôi hay mất ngủ và mỏi vai gáy"
+              placeholder={t.hero.placeholder}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
             <button type="submit" className="btn btn--primary">
               <ArrowUp size={18} aria-hidden="true" />
-              Hỏi ngay
+              {t.hero.submit}
             </button>
           </form>
 
-          <ul className="hero__quick" aria-label="Hỏi nhanh">
-            {QUICK.map((q) => (
-              <li key={q}>
-                <button type="button" className="key" onClick={() => ask(QUICK_TEXT[q])}>
-                  {q}
+          <ul className="hero__quick" aria-label={t.hero.quickLabel}>
+            {t.hero.quick.map((q) => (
+              <li key={q.label}>
+                <button type="button" className="key" onClick={() => ask(q.text)}>
+                  {q.label}
                 </button>
               </li>
             ))}
@@ -143,28 +141,28 @@ export function Hero() {
             <img
               className="hero__fallback"
               src="/products/070707.webp"
-              alt={SAMPLE.name}
+              alt={loc(SAMPLE.name)}
               width={560}
               height={560}
               fetchPriority="high"
             />
           )}
 
-          <figure className="rx-label" aria-label="Ví dụ một dòng trong phác đồ">
+          <figure className="rx-label" aria-label={t.hero.sampleLabel}>
             <figcaption className="rx-label__head">
-              <span>{SAMPLE.name}</span>
-              <span className="rx-label__pack">{SAMPLE.pack}</span>
+              <span>{loc(SAMPLE.name)}</span>
+              <span className="rx-label__pack">{loc(SAMPLE.pack)}</span>
             </figcaption>
             <div className="rx-label__row">
-              <p className="rx-label__dose">2 viên</p>
+              <p className="rx-label__dose">{t.hero.sampleDose}</p>
               <p className="rx-stamp" aria-hidden="true">
                 <span className="rx-stamp__time">08:00</span>
-                <span>sau ăn sáng</span>
+                <span>{t.hero.sampleStamp}</span>
               </p>
             </div>
-            <p className="rx-label__when">mỗi ngày, sau bữa sáng</p>
+            <p className="rx-label__when">{t.hero.sampleWhen}</p>
             <p className="rx-label__stub">
-              <span>Giá tại Greenway</span>
+              <span>{t.hero.priceAt}</span>
               <span className="mono">{formatVnd(SAMPLE.price)}</span>
             </p>
           </figure>
@@ -177,7 +175,7 @@ export function Hero() {
               aria-pressed={paused}
             >
               {paused ? <Play size={16} aria-hidden="true" /> : <Pause size={16} aria-hidden="true" />}
-              {paused ? 'Chạy tiếp' : 'Dừng chuyển động'}
+              {paused ? t.hero.resume : t.hero.pause}
             </button>
           )}
         </div>

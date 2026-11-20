@@ -6,11 +6,15 @@
  * Hiện mọi câu trả lời là mock (trễ 800ms). Để nối API thật:
  *   1. Đặt `VITE_API_BASE_URL` trong file .env (ví dụ http://localhost:8000).
  *   2. Endpoint: POST /api/v1/chat, request/response dạng snake_case như `ChatRequestDTO`/`ChatReplyDTO`.
+ *   3. Trả lời bằng ngôn ngữ trong trường `language` ('vi' hoặc 'en').
  * Mua hàng không đi qua app này: mỗi sản phẩm mở thẳng trang của nó trên cửa hàng Greenway.
  */
 import type { Analysis, ChatReply, ChatRequest, NeedId, Recommendation } from '../types/healthcare';
-import { NEED_KEYWORDS, NEEDS, PRODUCTS, getProduct, productsFor } from '../data/greenwayCatalog';
+import { NEED_KEYWORDS, PRODUCTS, getProduct, productsFor } from '../data/greenwayCatalog';
 import { bmiApplies, bmiCategory, bmiFrom, fold, formatNumber, formatVnd } from '../lib/health';
+import { getT, loc, type Lang } from '../i18n';
+import { vi } from '../i18n/vi';
+import { en } from '../i18n/en';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const USE_MOCK = !API_BASE_URL;
@@ -24,6 +28,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface ChatRequestDTO {
   message: string;
+  language: Lang;
   images_base64: string[];
   profile: { gender: 'female' | 'male' | null; age: number | null; height_cm: number | null; weight_kg: number | null };
   history: { role: 'user' | 'assistant'; text: string; product_codes: string[] }[];
@@ -50,6 +55,7 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatReply> {
   }
   const body: ChatRequestDTO = {
     message: req.message,
+    language: req.lang,
     images_base64: await Promise.all(req.attachments.filter((a) => a.file).map((a) => fileToBase64(a.file!))),
     profile: {
       gender: req.metrics.gender,
@@ -64,7 +70,7 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatReply> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Máy chủ trả về lỗi ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const d = (await res.json()) as ChatReplyDTO;
   return {
     text: d.text,
@@ -76,31 +82,21 @@ export async function sendChatMessage(req: ChatRequest): Promise<ChatReply> {
 
 /* ------------------------------------------------------------------ */
 /* Mock: bộ luật đơn giản, đủ để demo hội thoại nhiều lượt             */
+/* Chữ trả lời nằm trong từ điển (t.ai); từ khóa nhận diện cả VI và EN */
 /* ------------------------------------------------------------------ */
 
-const NEED_CAUSE: Record<NeedId, string> = {
-  sleep: 'Ngủ chập chờn thường đi cùng hệ thần kinh bị kích thích lâu ngày; buổi tối cơ thể không “hạ nhiệt” kịp nên khó vào giấc.',
-  heart: 'Mỡ máu và huyết áp phản ánh chuyển hóa chất béo: cholesterol xấu bám thành mạch làm lòng mạch hẹp lại, tim phải làm việc nhiều hơn.',
-  joint: 'Mỏi vai gáy, đau khớp hay gặp khi ngồi lâu, sụn khớp hao mòn và thiếu canxi, vitamin D. Tê tay lúc ngủ dậy còn liên quan tới tuần hoàn ngoại vi.',
-  weight: 'Mỡ bụng tích lại khi tinh bột nhanh vượt nhu cầu; insulin tăng liên tục khiến cơ thể ưu tiên dự trữ mỡ quanh nội tạng.',
-  digest: 'Đầy hơi, trào ngược thường do ăn nhanh, ăn khuya, ít chất xơ, khiến dạ dày quá tải và hệ vi sinh đường ruột mất cân bằng.',
-  beauty: 'Da xỉn, tóc rụng thường do thiếu chất chống oxy hóa và collagen giảm dần sau tuổi 25, cộng thêm nắng và căng thẳng.',
-  immune: 'Hay ốm vặt là dấu hiệu sức đề kháng giảm: thiếu vitamin C, D, ngủ ít và căng thẳng kéo dài đều góp phần.',
-  men: 'Sức khỏe nam giới sau tuổi 35 chịu ảnh hưởng của nội tiết, giấc ngủ và tuần hoàn; cần chăm sóc đều chứ không chỉ khi có triệu chứng.',
+/** Ý định của câu hỏi, so trên chuỗi đã bỏ dấu, chữ thường. */
+const INTENT = {
+  thanks: /cam on|thank|ok roi|vay nhe|great|got it/,
+  price: /gia|bao nhieu|tien|re hon|dat qua|price|cost|how much|cheaper|expensive/,
+  dose: /uong|lieu|khi nao|may vien|cach dung|lich|dose|dosage|how do i take|when should|schedule|how many/,
+  safety: /tac dung phu|an toan|bau|cho con bu|dang uong thuoc|benh nen|side effect|safe|pregnan|breastfeed|medication|medicine/,
+  duration: /bao lau|hieu qua|khi nao thay|how long|results|work\b/,
+  combo: /di kem|ket hop|dung cung|them san pham|goes well|pair|combine|together/,
+  whereBuy: /mua o dau|dat hang|mua the nao|chinh hang|where.*buy|order|purchase|official/,
 };
-
-const NEED_TIP: Record<NeedId, string> = {
-  sleep: 'Tắt màn hình trước khi ngủ 45 phút, giữ phòng tối và mát.',
-  heart: 'Giảm đồ chiên rán, ăn cá 2 đến 3 bữa mỗi tuần, đi bộ nhanh 30 phút mỗi ngày.',
-  joint: 'Cứ 45 phút ngồi, đứng dậy xoay cổ và vai chậm 10 vòng mỗi chiều.',
-  weight: 'Ăn rau trước, đạm sau, tinh bột cuối; dừng tinh bột sau 19 giờ.',
-  digest: 'Nhai chậm, không nằm ngay trong 2 tiếng sau bữa tối.',
-  beauty: 'Thoa kem chống nắng mỗi sáng, ngủ trước 23 giờ.',
-  immune: 'Ngủ đủ 7 tiếng, uống đủ nước ấm, ăn thêm trái cây có múi.',
-  men: 'Duy trì vận động sức bền 3 buổi mỗi tuần và hạn chế rượu bia.',
-};
-
-const needLabel = (id: NeedId) => NEEDS.find((n) => n.id === id)?.label.toLowerCase() ?? id;
+/** Tin "gửi chỉ số" có tiền tố theo ngôn ngữ; nhận cả hai để đổi ngôn ngữ giữa chừng vẫn đúng. */
+const METRIC_PREFIXES = [vi.summary.prefix, en.summary.prefix].map((p) => fold(p).replace(/:$/, ''));
 
 function detectNeeds(text: string): NeedId[] {
   const t = ` ${fold(text)} `;
@@ -115,166 +111,126 @@ function lastProducts(history: ChatRequest['history']): Recommendation[] {
   return [];
 }
 
-function pick(needs: NeedId[], exclude: Set<string> = new Set()): Recommendation[] {
-  const out: Recommendation[] = [];
-  for (const need of needs) {
-    for (const p of productsFor(need)) {
-      if (out.length >= 3) break;
-      if (exclude.has(p.code) || out.some((o) => o.code === p.code)) continue;
-      out.push({ code: p.code, reason: `Cho nhu cầu ${needLabel(need)}` });
-      if (out.filter((o) => o.reason.endsWith(needLabel(need))).length >= 2) break;
-    }
-  }
-  return out;
-}
-
-function analysisFor(req: ChatRequest, needs: NeedId[]): Analysis | undefined {
-  const bmi = bmiApplies(req.metrics.age) ? bmiFrom(req.metrics) : null;
-  const findings = needs.slice(0, 2).map((n) => NEED_CAUSE[n]);
-  if (bmi === null && findings.length === 0) return undefined;
-  const cat = bmi !== null ? bmiCategory(bmi) : null;
-  if (cat) findings.unshift(`BMI ${formatNumber(bmi!)}: ${cat.label.toLowerCase()} theo chuẩn châu Á. ${cat.hint}`);
-  return { bmi, bmiLabel: cat?.label ?? null, findings };
-}
-
 function mockReply(req: ChatRequest): ChatReply {
+  const T = getT();
+  const ai = T.ai;
+  const needLabel = (id: NeedId) => T.needs[id].toLowerCase();
+  const name = (code: string) => loc(getProduct(code)!.name);
+
+  /** Tối đa 3 sản phẩm, mỗi nhu cầu tối đa 2. */
+  const pick = (needs: NeedId[], exclude: Set<string> = new Set()): Recommendation[] => {
+    const out: Recommendation[] = [];
+    for (const need of needs) {
+      let perNeed = 0;
+      for (const p of productsFor(need)) {
+        if (out.length >= 3 || perNeed >= 2) break;
+        if (exclude.has(p.code) || out.some((o) => o.code === p.code)) continue;
+        out.push({ code: p.code, reason: ai.reasonFor(needLabel(need)) });
+        perNeed++;
+      }
+    }
+    return out;
+  };
+
+  const analysisFor = (needs: NeedId[]): Analysis | undefined => {
+    const bmi = bmiApplies(req.metrics.age) ? bmiFrom(req.metrics) : null;
+    const findings = needs.slice(0, 2).map((n) => ai.causes[n]);
+    if (bmi === null && findings.length === 0) return undefined;
+    const cat = bmi !== null ? bmiCategory(bmi) : null;
+    if (cat && bmi !== null) findings.unshift(ai.bmiFinding(formatNumber(bmi), cat.label, cat.hint));
+    return { bmi, bmiLabel: cat?.label ?? null, findings };
+  };
+
   const t = fold(req.message);
   const prev = lastProducts(req.history);
   const isFirstTurn = !req.history.some((h) => h.role === 'user');
+  const isMetrics = (s: string) => METRIC_PREFIXES.some((p) => fold(s).startsWith(p));
 
   if (req.attachments.length && !req.message.trim()) {
-    return {
-      text: `Mình đã nhận ${req.attachments.length} ảnh. Bạn kể thêm một chút: ảnh chụp gì, và bạn đang thấy khó chịu ở đâu? Mình sẽ đối chiếu cùng lời bạn kể.`,
-      suggestions: ['Đây là kết quả xét nghiệm máu', 'Ảnh vùng da bị mụn', 'Hộp thuốc tôi đang uống'],
-    };
+    return { text: ai.imagesOnly(req.attachments.length), suggestions: ai.imagesOnlySuggest };
   }
 
   // Khách bấm "Gửi chỉ số cho AI": phân tích lại với chỉ số mới, dựa trên các vấn đề đã kể trước đó.
-  if (t.startsWith('chi so cua toi')) {
-    const earlier = req.history.filter((h) => h.role === 'user' && !fold(h.text).startsWith('chi so cua toi'));
+  if (isMetrics(req.message)) {
+    const earlier = req.history.filter((h) => h.role === 'user' && !isMetrics(h.text));
     const needs = detectNeeds(earlier.map((h) => h.text).join(' '));
     const bmi = bmiApplies(req.metrics.age) ? bmiFrom(req.metrics) : null;
     if (bmi !== null && bmi >= 23 && !needs.includes('weight')) needs.push('weight');
-    const analysis = analysisFor(req, needs);
     const products = needs.length ? pick(needs, new Set(prev.map((p) => p.code))) : [];
-    const head = bmi !== null
-      ? `Mình đã nhận chỉ số. BMI của bạn là ${formatNumber(bmi)}, mình đã tính vào phân tích bên dưới.`
-      : 'Mình đã nhận chỉ số. Thêm chiều cao và cân nặng thì mình tính được BMI cho bạn.';
-    const tail = needs.length
-      ? products.length ? '\nVới chỉ số này, mình gợi ý thêm:' : '\nCác sản phẩm mình gợi ý ở trên vẫn phù hợp.'
-      : '\nBạn kể thêm điều đang làm bạn khó chịu để mình chọn sản phẩm cho đúng nhé.';
+    const head = bmi !== null ? ai.metricsBmi(formatNumber(bmi)) : ai.metricsNoBmi;
+    const tail = needs.length ? (products.length ? ai.metricsMore : ai.metricsSame) : ai.metricsAskMore;
     return {
       text: head + tail,
-      analysis,
+      analysis: analysisFor(needs),
       products,
-      suggestions: needs.length
-        ? ['Uống thế nào trong ngày?', 'Giá bao nhiêu?']
-        : ['Tôi khó ngủ, hay tỉnh giữa đêm', 'Tôi muốn giảm mỡ bụng', 'Tôi hay đau mỏi vai gáy'],
+      suggestions: needs.length ? ai.followSuggest : T.chat.welcomeSuggestions.slice(0, 3),
     };
   }
 
-  if (/cam on|thank|ok roi|vay nhe/.test(t)) {
-    return {
-      text: 'Không có gì. Bạn cứ quay lại hỏi tiếp khi dùng sản phẩm thấy chưa ổn, mình vẫn nhớ cuộc trò chuyện này.',
-      suggestions: ['Nhắc tôi lịch uống trong ngày', 'Tôi muốn hỏi vấn đề khác'],
-    };
-  }
+  if (INTENT.thanks.test(t)) return { text: ai.thanks, suggestions: ai.thanksSuggest };
 
-  if (prev.length && /gia|bao nhieu|tien|re hon|dat qua/.test(t)) {
+  if (prev.length && INTENT.price.test(t)) {
     const lines = prev.map((r) => {
       const p = getProduct(r.code)!;
-      return `${p.name}: ${formatVnd(p.price)} (${p.pack})`;
+      return ai.priceLine(name(r.code), formatVnd(p.price), loc(p.pack));
     });
     const total = prev.reduce((s, r) => s + (getProduct(r.code)?.price ?? 0), 0);
     return {
-      text: `Giá tại cửa hàng Greenway hôm nay:\n${lines.join('\n')}\nCả ${prev.length} sản phẩm là ${formatVnd(total)}. Nếu muốn bắt đầu nhẹ ví hơn, bạn chọn sản phẩm đầu tiên trước, đó là món thiết yếu nhất.`,
-      suggestions: ['Nếu chỉ chọn một sản phẩm?', 'Uống thế nào trong ngày?'],
+      text: `${ai.priceHead}\n${lines.join('\n')}\n${ai.priceTotal(prev.length, formatVnd(total))}`,
+      suggestions: ai.priceSuggest,
     };
   }
 
-  if (prev.length && /uong|lieu|khi nao|may vien|cach dung|lich/.test(t)) {
+  if (prev.length && INTENT.dose.test(t)) {
     const lines = prev.map((r) => {
       const p = getProduct(r.code)!;
-      return p.dosage ? `${p.name}: ${p.dosage}, ${p.timing}.` : `${p.name}: theo hướng dẫn trên bao bì, thường sau bữa ăn.`;
+      return p.dosage && p.timing ? ai.doseLine(name(r.code), loc(p.dosage), loc(p.timing)) : ai.doseDefault(name(r.code));
     });
-    return {
-      text: `Lịch dùng gợi ý:\n${lines.join('\n')}\nUống cách thuốc kê đơn ít nhất 2 tiếng nếu bạn đang dùng thuốc.`,
-      suggestions: ['Có tác dụng phụ không?', 'Bao lâu thì thấy hiệu quả?'],
-    };
+    return { text: `${ai.doseHead}\n${lines.join('\n')}\n${ai.doseNote}`, suggestions: ai.doseSuggest };
   }
 
-  if (/tac dung phu|an toan|bau|cho con bu|dang uong thuoc|benh nen/.test(t)) {
-    return {
-      text: 'Đây là thực phẩm bảo vệ sức khỏe, thường an toàn khi dùng đúng liều. Nếu bạn đang mang thai, cho con bú, có bệnh nền hoặc đang dùng thuốc kê đơn, hãy hỏi bác sĩ điều trị trước khi dùng. Bạn có đang thuộc trường hợp nào ở trên không?',
-      suggestions: ['Tôi đang uống thuốc huyết áp', 'Không, tôi khỏe mạnh'],
-    };
-  }
+  if (INTENT.safety.test(t)) return { text: ai.safety, suggestions: ai.safetySuggest };
 
-  if (prev.length && /bao lau|hieu qua|khi nao thay/.test(t)) {
-    return {
-      text: 'Thường cần dùng đều 4 đến 8 tuần để cơ thể thay đổi rõ, kèm thói quen sinh hoạt mình đã gợi ý. Sau 2 tuần, bạn quay lại kể mình nghe thay đổi nhé.',
-      suggestions: ['Uống thế nào trong ngày?', 'Tôi muốn hỏi vấn đề khác'],
-    };
-  }
+  if (prev.length && INTENT.duration.test(t)) return { text: ai.duration, suggestions: ai.durationSuggest };
 
-  if (prev.length && /di kem|ket hop|dung cung|them san pham/.test(t)) {
+  if (prev.length && INTENT.combo.test(t)) {
     const needs = [...new Set(prev.flatMap((r) => getProduct(r.code)?.needs ?? []))];
     const products = pick(needs, new Set(prev.map((p) => p.code)));
-    if (products.length) {
-      return {
-        text: 'Có thể dùng kèm những sản phẩm cùng nhóm dưới đây. Bắt đầu với một món trước, sau 2 tuần thêm món thứ hai để biết cơ thể hợp với gì.',
-        products,
-        suggestions: ['Giá bao nhiêu?', 'Uống thế nào trong ngày?'],
-      };
-    }
+    if (products.length) return { text: ai.combo, products, suggestions: ai.followSuggest };
   }
 
-  if (/mua o dau|dat hang|mua the nao|chinh hang/.test(t)) {
-    return {
-      text: 'Bạn bấm “Mua tại Greenway” trên từng sản phẩm, trang của cửa hàng chính hãng Greenway Global sẽ mở ra, có sẵn giá và giỏ hàng.',
-      suggestions: ['Giá bao nhiêu?', 'Uống thế nào trong ngày?'],
-    };
-  }
+  if (INTENT.whereBuy.test(t)) return { text: ai.whereBuy, suggestions: ai.followSuggest };
 
-  // Hỏi về một sản phẩm cụ thể (nút "Hỏi dược sĩ AI" trên thẻ sản phẩm gửi kèm tên)
-  const named = PRODUCTS.find((p) => t.includes(fold(p.name)));
+  // Hỏi về một sản phẩm cụ thể (nút "Hỏi dược sĩ AI" trên thẻ sản phẩm gửi kèm tên, ở ngôn ngữ nào cũng nhận)
+  const named = PRODUCTS.find((p) => [loc(p.name, 'vi'), loc(p.name, 'en')].some((n) => t.includes(fold(n))));
   if (named) {
-    const dose = named.dosage ? `${named.dosage}, ${named.timing}` : 'theo hướng dẫn trên bao bì, thường sau bữa ăn';
+    const dose = named.dosage && named.timing ? `${loc(named.dosage)}, ${loc(named.timing)}` : ai.namedDoseDefault;
     return {
-      text: `${named.name} thuộc dòng ${named.brand}, dành cho nhu cầu ${named.needs.map(needLabel).join(', ')}. Giá ${formatVnd(named.price)} cho ${named.pack}, dùng ${dose}.\nĐể biết có hợp với bạn không, bạn kể mình nghe tình trạng hiện tại nhé.`,
-      products: [{ code: named.code, reason: 'Sản phẩm bạn hỏi' }],
-      suggestions: ['Tôi có nên dùng không?', 'Có tác dụng phụ không?', 'Có sản phẩm nào đi kèm?'],
+      text: ai.named(loc(named.name), named.brand, named.needs.map(needLabel).join(', '), formatVnd(named.price), loc(named.pack), dose),
+      products: [{ code: named.code, reason: ai.namedReason }],
+      suggestions: ai.namedSuggest,
     };
   }
 
   const needs = detectNeeds(req.message);
-  const metricsNeed: NeedId[] = [];
   const bmi = bmiFrom(req.metrics);
-  if (bmi !== null && bmi >= 23 && bmiApplies(req.metrics.age) && !needs.includes('weight')) metricsNeed.push('weight');
-  const allNeeds = [...needs, ...metricsNeed];
+  if (bmi !== null && bmi >= 23 && bmiApplies(req.metrics.age) && !needs.includes('weight')) needs.push('weight');
 
-  if (allNeeds.length === 0) {
+  if (needs.length === 0) {
     return {
-      text: req.attachments.length
-        ? 'Mình đã nhận ảnh. Bạn mô tả thêm triệu chứng hoặc điều bạn muốn cải thiện (ví dụ ngủ, cân nặng, khớp, tiêu hóa) để mình gợi ý sát hơn nhé.'
-        : 'Bạn kể cụ thể hơn một chút nhé: khó chịu ở đâu, bao lâu rồi, lúc nào nặng hơn? Ví dụ “tôi khó ngủ, hay tỉnh lúc 3 giờ sáng”.',
-      suggestions: ['Tôi khó ngủ, hay tỉnh giữa đêm', 'Tôi muốn giảm mỡ bụng', 'Tôi hay đau mỏi vai gáy'],
+      text: req.attachments.length ? ai.askMoreImages : ai.askMore,
+      suggestions: T.chat.welcomeSuggestions.slice(0, 3),
     };
   }
 
-  const products = pick(allNeeds, new Set(prev.map((p) => p.code)));
-  const analysis = analysisFor(req, allNeeds);
-  const g = req.metrics.gender === 'female' ? 'chị' : req.metrics.gender === 'male' ? 'anh' : 'bạn';
-  const opening = isFirstTurn
-    ? `Chào ${g}, cảm ơn ${g} đã kể. Những gì ${g} gặp khá phổ biến và cải thiện được từ gốc.`
-    : `Mình hiểu rồi, thêm phần ${allNeeds.map(needLabel).join(' và ')} vào nhé.`;
-  const tip = `Trước khi dùng sản phẩm: ${NEED_TIP[allNeeds[0]]}`;
-  const noMetrics = bmi === null && isFirstTurn ? ' Nếu muốn mình tính cả BMI, điền chiều cao, cân nặng ở cột bên cạnh.' : '';
+  const g = ai.honor[req.metrics.gender ?? 'none'];
+  const opening = isFirstTurn ? ai.opening(g) : ai.openingNext(needs.map(needLabel).join(ai.and));
+  const noMetrics = bmi === null && isFirstTurn ? ai.noMetrics : '';
 
   return {
-    text: `${opening}\n${tip}${noMetrics}`,
-    analysis,
-    products,
-    suggestions: ['Giá bao nhiêu?', 'Uống thế nào trong ngày?', 'Có tác dụng phụ không?'],
+    text: `${opening}\n${ai.tipPrefix(ai.tips[needs[0]])}${noMetrics}`,
+    analysis: analysisFor(needs),
+    products: pick(needs, new Set(prev.map((p) => p.code))),
+    suggestions: ai.defaultSuggest,
   };
 }

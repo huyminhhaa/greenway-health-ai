@@ -8,6 +8,7 @@
 /* Hallmark · dismissed F20 · the suggestion chips wrap by text length, so their row count changes with every answer */
 /* Hallmark · dismissed 49 · "Gửi chỉ số cho AI phân tích" sits in .btn, which sets white-space: nowrap, inside a column at least 340px wide */
 /* Hallmark · dismissed 28a · the product rail sits two screens below the hero; its first packshot is never the LCP */
+/* Hallmark · dismissed F4 · .lang__btn[aria-pressed] is the selected segment of the VI/EN toggle, a state like the need chips, not a second action button */
 
 @import url('./tokens.css');
 @import url('./base.css');
@@ -349,6 +350,47 @@ body {
   text-decoration-color: var(--color-accent);
 }
 
+/* Chuyển ngôn ngữ VI / EN */
+.lang {
+  display: inline-flex;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--color-rule);
+}
+.lang__btn {
+  position: relative;
+  min-width: 40px;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-ink-2);
+  font: 500 var(--text-sm) / 1 var(--font-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-short) var(--ease-out),
+    color var(--dur-short) var(--ease-out),
+    transform var(--dur-micro) var(--ease-out);
+}
+/* vùng chạm 44px */
+.lang__btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.lang__btn:hover {
+  color: var(--color-ink);
+}
+.lang__btn:active {
+  transform: scale(0.95);
+}
+.lang__btn[aria-pressed='true'] {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
 /* ------------------------------------------------------------------ */
 /* Hero                                                                */
 /* ------------------------------------------------------------------ */
@@ -600,7 +642,7 @@ body {
 /* ------------------------------------------------------------------ */
 
 .consult {
-  padding-block: var(--section-gap-s) var(--section-gap);
+  padding-block: var(--section-gap-s);
 }
 .consult__head {
   display: grid;
@@ -1385,7 +1427,7 @@ body {
 /* ------------------------------------------------------------------ */
 
 .shelf {
-  padding-block: var(--section-gap) var(--section-gap-l);
+  padding-block: var(--section-gap-s) var(--section-gap);
 }
 .shelf__head {
   display: grid;
@@ -1437,6 +1479,16 @@ body {
   /* Khối chứa cho chữ ẩn bên trong thẻ: không có nó, khi tắt chuyển động (không còn transform) chữ ẩn thoát khỏi vùng cuộn và kéo rộng trang. */
   position: relative;
   scroll-snap-align: start;
+}
+/* Đổi danh mục: thẻ mới trượt vào ngay, không chờ cuộn; chỉ transform + opacity nên chạy trên GPU. */
+.rail__item.is-switching {
+  animation: rail-in 0.45s var(--ease-out) calc(min(var(--i, 0), 5) * 40ms) both;
+}
+@keyframes rail-in {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0);
+  }
 }
 
 .tile {
@@ -1736,6 +1788,12 @@ body {
   .nav__link {
     display: none;
   }
+  .nav__links {
+    gap: var(--space-sm);
+  }
+  .nav__word {
+    width: 108px;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1766,7 +1824,8 @@ body {
   .hero__light span,
   .hero__copy,
   .rx-label,
-  .rx-stamp {
+  .rx-stamp,
+  .rail__item.is-switching {
     animation: none;
   }
   .js [data-reveal] {

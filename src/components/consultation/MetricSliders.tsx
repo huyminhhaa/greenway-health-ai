@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { CircleCheck, Send } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useHealthStore } from '../../store/useHealthStore';
+import { metricsKey, useHealthStore } from '../../store/useHealthStore';
+import { useT } from '../../i18n';
 import {
   BMI_SCALE,
   METRIC_RANGES,
@@ -11,7 +12,6 @@ import {
   bmiToProgress,
   clamp,
   formatNumber,
-  metricsSummary,
   type MetricKey,
 } from '../../lib/health';
 import type { Gender } from '../../types/healthcare';
@@ -22,7 +22,9 @@ const THRESHOLDS = [18.5, 23, 25];
 function MetricField({ metric }: { metric: MetricKey }) {
   const value = useHealthStore((s) => s.metrics[metric]);
   const setMetric = useHealthStore((s) => s.setMetric);
-  const { min, max, step, unit, label, fallback } = METRIC_RANGES[metric];
+  const t = useT();
+  const { min, max, step, fallback } = METRIC_RANGES[metric];
+  const { label, unit } = t.profile.fields[metric];
   const [draft, setDraft] = useState(value === null ? '' : formatNumber(value));
   const [error, setError] = useState<string | null>(null);
   const id = `metric-${metric}`;
@@ -41,11 +43,11 @@ function MetricField({ metric }: { metric: MetricKey }) {
     }
     const n = Number(trimmed.replace(',', '.'));
     if (!Number.isFinite(n)) {
-      setError(`Nhập một con số, ví dụ ${fallback}.`);
+      setError(t.profile.errNumber(fallback));
       return;
     }
     if (n < min || n > max) {
-      setError(`${label} từ ${min} đến ${max} ${unit}.`);
+      setError(t.profile.errRange(label, min, max, unit));
       setMetric(metric, clamp(n, min, max));
       return;
     }
@@ -69,7 +71,7 @@ function MetricField({ metric }: { metric: MetricKey }) {
             className="metric__input mono"
             inputMode="decimal"
             autoComplete="off"
-            placeholder={`${min} đến ${max}`}
+            placeholder={t.profile.range(min, max)}
             value={draft}
             aria-invalid={!!error}
             aria-describedby={error ? `${id}-error` : undefined}
@@ -91,8 +93,8 @@ function MetricField({ metric }: { metric: MetricKey }) {
         max={max}
         step={step}
         value={shown}
-        aria-label={`${label}, kéo để chọn`}
-        aria-valuetext={value === null ? 'Chưa nhập' : `${formatNumber(value)} ${unit}`}
+        aria-label={t.profile.slider(label)}
+        aria-valuetext={value === null ? t.profile.empty : `${formatNumber(value)} ${unit}`}
         onChange={(e) => {
           setError(null);
           setMetric(metric, Number(e.target.value));
@@ -109,15 +111,16 @@ function MetricField({ metric }: { metric: MetricKey }) {
 }
 
 function GenderKeys() {
+  const t = useT();
   const gender = useHealthStore((s) => s.metrics.gender);
   const setMetric = useHealthStore((s) => s.setMetric);
   const options: { value: Gender; label: string }[] = [
-    { value: 'female', label: 'Nữ' },
-    { value: 'male', label: 'Nam' },
+    { value: 'female', label: t.profile.female },
+    { value: 'male', label: t.profile.male },
   ];
   return (
     <fieldset className="gender">
-      <legend className="metric__label">Giới tính</legend>
+      <legend className="metric__label">{t.profile.gender}</legend>
       <div className="gender__keys">
         {options.map((o) => (
           <button
@@ -136,15 +139,16 @@ function GenderKeys() {
 }
 
 function BmiMeter() {
+  const t = useT();
   const metrics = useHealthStore((s) => s.metrics);
   const bmi = bmiFrom(metrics);
   const span = BMI_SCALE.max - BMI_SCALE.min;
 
   if (!bmiApplies(metrics.age)) {
-    return <p className="bmi__empty">BMI theo chuẩn người lớn không áp dụng cho trẻ dưới 18 tuổi.</p>;
+    return <p className="bmi__empty">{t.profile.bmiChild}</p>;
   }
   if (bmi === null) {
-    return <p className="bmi__empty">Có chiều cao và cân nặng, BMI sẽ hiện ở đây.</p>;
+    return <p className="bmi__empty">{t.profile.bmiEmpty}</p>;
   }
   const cat = bmiCategory(bmi);
 
@@ -152,7 +156,7 @@ function BmiMeter() {
     <div className="bmi" data-cat={cat.key}>
       <div className="bmi__head" aria-live="polite">
         <p className="bmi__figure">
-          <span className="visually-hidden">Chỉ số BMI </span>
+          <span className="visually-hidden">{t.profile.bmiSr}</span>
           {formatNumber(bmi)}
         </p>
         <p className="bmi__cat">
@@ -180,14 +184,15 @@ function BmiMeter() {
 
 /** Cho khách thấy rõ: AI đã nhận chỉ số chưa, và gửi ngay để phân tích. */
 function ReceiptBar() {
+  const t = useT();
   const metrics = useHealthStore((s) => s.metrics);
   const sent = useHealthStore((s) => s.sentMetrics);
   const pending = useHealthStore((s) => s.pending);
   const sendMetrics = useHealthStore((s) => s.sendMetrics);
-  const summary = metricsSummary(metrics);
+  const key = metricsKey(metrics);
 
-  if (!summary) return null;
-  const upToDate = summary === sent;
+  if (!key) return null;
+  const upToDate = key === sent;
 
   return (
     <div className={`receipt${upToDate ? ' is-sent' : ''}`} aria-live="polite">
@@ -201,15 +206,13 @@ function ReceiptBar() {
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
         >
           <CircleCheck size={18} aria-hidden="true" />
-          {upToDate
-            ? 'Dược sĩ AI đã dùng các chỉ số này.'
-            : 'Dược sĩ AI sẽ dùng các chỉ số này từ câu trả lời tiếp theo.'}
+          {upToDate ? t.profile.receiptSent : t.profile.receiptNew}
         </motion.p>
       </AnimatePresence>
       {!upToDate && (
         <button type="button" className="btn btn--primary btn--sm" disabled={pending} onClick={sendMetrics}>
           <Send size={16} aria-hidden="true" />
-          Gửi chỉ số cho AI phân tích
+          {t.profile.sendMetrics}
         </button>
       )}
     </div>
@@ -217,12 +220,13 @@ function ReceiptBar() {
 }
 
 export function ProfilePanel({ showNote = true }: { showNote?: boolean }) {
+  const t = useT();
   const clearMetrics = useHealthStore((s) => s.clearMetrics);
   const hasAny = useHealthStore((s) => Object.values(s.metrics).some((v) => v !== null));
 
   return (
     <div className="profile">
-      {showNote && <p className="profile__note">Không bắt buộc. Điền vào thì dược sĩ AI tính BMI và tư vấn sát hơn.</p>}
+      {showNote && <p className="profile__note">{t.profile.note}</p>}
       <GenderKeys />
       <MetricField metric="age" />
       <MetricField metric="heightCm" />
@@ -231,7 +235,7 @@ export function ProfilePanel({ showNote = true }: { showNote?: boolean }) {
       <ReceiptBar />
       {hasAny && (
         <button type="button" className="text-btn profile__clear" onClick={clearMetrics}>
-          Xóa các chỉ số
+          {t.profile.clear}
         </button>
       )}
     </div>
