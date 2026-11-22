@@ -1,28 +1,73 @@
-import { useEffect, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown, ExternalLink, Globe } from 'lucide-react';
 import { shopHome } from '../../data/greenwayCatalog';
 import { LANGS, useLang, useT } from '../../i18n';
 
-/** Nút chuyển ngôn ngữ VI / EN. */
+/** Chọn ngôn ngữ từ menu thả xuống. */
 function LangSwitch() {
   const t = useT();
   const lang = useLang((s) => s.lang);
   const setLang = useLang((s) => s.setLang);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [open]);
+
   return (
-    <div className="lang" role="group" aria-label={t.lang.label}>
-      {LANGS.map((id) => (
-        <button
-          key={id}
-          type="button"
-          className="lang__btn"
-          aria-pressed={lang === id}
-          aria-label={t.lang[id]}
-          lang={id}
-          onClick={() => setLang(id)}
-        >
-          {id.toUpperCase()}
-        </button>
-      ))}
+    <div
+      ref={rootRef}
+      className="lang"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.preventDefault();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className="lang__trigger"
+        aria-label={`${t.lang.label}: ${t.lang[lang]}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Globe size={19} aria-hidden="true" />
+        <span>{lang.toUpperCase()}</span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      <div id={panelId} className="lang__menu" hidden={!open} role="group" aria-label={t.lang.label}>
+        {LANGS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className="lang__option"
+            aria-pressed={lang === id}
+            lang={id}
+            onClick={() => {
+              setLang(id);
+              setOpen(false);
+              triggerRef.current?.focus();
+            }}
+          >
+            {t.lang[id]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

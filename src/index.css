@@ -8,7 +8,6 @@
 /* Hallmark · dismissed F20 · the suggestion chips wrap by text length, so their row count changes with every answer */
 /* Hallmark · dismissed 49 · "Gửi chỉ số cho AI phân tích" sits in .btn, which sets white-space: nowrap, inside a column at least 340px wide */
 /* Hallmark · dismissed 28a · the product rail sits two screens below the hero; its first packshot is never the LCP */
-/* Hallmark · dismissed F4 · .lang__btn[aria-pressed] is the selected segment of the VI/EN toggle, a state like the need chips, not a second action button */
 
 @import url('./tokens.css');
 @import url('./base.css');
@@ -352,43 +351,58 @@ body {
 
 /* Chuyển ngôn ngữ VI / EN */
 .lang {
-  display: inline-flex;
-  gap: var(--space-3xs);
-  padding: var(--space-3xs);
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--color-rule);
-}
-.lang__btn {
   position: relative;
-  min-width: 40px;
-  height: 36px;
-  padding: 0 var(--space-sm);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.lang__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 8px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: 6px;
   background: transparent;
-  color: var(--color-ink-2);
-  font: 500 var(--text-sm) / 1 var(--font-body);
-  cursor: pointer;
-  transition:
-    background-color var(--dur-short) var(--ease-out),
-    color var(--dur-short) var(--ease-out),
-    transform var(--dur-micro) var(--ease-out);
-}
-/* vùng chạm 44px */
-.lang__btn::after {
-  content: '';
-  position: absolute;
-  inset: -4px 0;
-}
-.lang__btn:hover {
   color: var(--color-ink);
+  font: 600 16px / 1 var(--font-body);
+  cursor: pointer;
 }
-.lang__btn:active {
-  transform: scale(0.95);
+.lang__trigger svg {
+  color: var(--color-accent);
 }
-.lang__btn[aria-pressed='true'] {
-  background: var(--color-ink);
-  color: var(--color-paper);
+.lang__menu {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  top: calc(100% + 12px);
+  right: 0;
+  width: 213px;
+  padding: 8px;
+  border: 1px solid #e3e3e3;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 9%);
+}
+.lang__option {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink);
+  font: 400 18px / 1.5 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+.lang__option:hover,
+.lang__option:focus-visible,
+.lang__option[aria-pressed='true'] {
+  background: #f8f8f8;
+}
+.lang__option[aria-pressed='true'] {
+  color: var(--color-accent);
 }
 
 /* ------------------------------------------------------------------ */
